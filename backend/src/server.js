@@ -32,18 +32,39 @@ if (isProd) {
 }
 
 app.use(helmet());
+const rawClientUrls = process.env.CLIENT_URL?.trim();
+const allowedOrigins = rawClientUrls
+  ? rawClientUrls
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+  : ["http://localhost:5173"];
+const allowAllOrigins = !rawClientUrls && isProd;
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL?.split(",").map((x) => x.trim()) || ["http://localhost:5173"]
-  })
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (allowAllOrigins || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(
+        new Error(`CORS policy blocked request from ${origin}`),
+        false,
+      );
+    },
+    credentials: true,
+  }),
 );
 app.use(express.json());
 app.use(morgan("dev"));
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 300
-  })
+    max: 300,
+  }),
 );
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
