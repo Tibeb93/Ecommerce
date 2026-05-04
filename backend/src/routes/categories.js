@@ -1,11 +1,11 @@
 import express from "express";
-import db from "../db.js";
+import Category from "../models/Category.js";
 
 const router = express.Router();
 
-router.get("/", (_, res) => {
-  const categories = db.prepare("SELECT id, name FROM categories ORDER BY name").all();
-  res.json(categories);
+router.get("/", async (_, res) => {
+  const categories = await Category.find().sort({ name: 1 }).select("_id name").lean();
+  res.json(categories.map((c) => ({ id: c._id, name: c.name })));
 });
 
 export default router;

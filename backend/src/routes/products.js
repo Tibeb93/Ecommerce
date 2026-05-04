@@ -1,57 +1,56 @@
 import express from "express";
-import db from "../db.js";
 import { protect } from "../middleware/auth.js";
 import { isNonEmptyString, toSafeTrimmed } from "../utils/validators.js";
+import Product from "../models/Product.js";
+import Category from "../models/Category.js";
+import Review from "../models/Review.js";
+import User from "../models/User.js";
 
 const router = express.Router();
 
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   const { q = "", category = "", sort = "newest", min = 0, max = 999999 } = req.query;
 
-  const sortMap = {
-    newest: "p.createdAt DESC",
-    priceAsc: "p.price ASC",
-    priceDesc: "p.price DESC",
-    rating: "p.rating DESC"
+  const sortMap = { newest: { createdAt: -1 }, priceAsc: { price: 1 }, priceDesc: { price: -1 }, rating: { rating: -1 } };
+  const filter = {
+    title: { $regex: String(q), $options: "i" },
+    price: { $gte: Number(min), $lte: Number(max) }
   };
 
-  const rows = db.prepare(`
-    SELECT p.*, c.name as category
-    FROM products p
-    JOIN categories c ON c.id = p.categoryId
-    WHERE p.title LIKE @q
-      AND c.name LIKE @category
-      AND p.price BETWEEN @min AND @max
-    ORDER BY ${sortMap[sort] ?? sortMap.newest}
-  `).all({
-    q: `%${q}%`,
-    category: `%${category}%`,
-    min: Number(min),
-    max: Number(max)
-  });
+  if (category) {
+    const categoryDoc = await Category.findOne({ name: { $regex: `^${category}$`, $options: "i" } }).select("_id").lean();
+    if (!categoryDoc) return res.json([]);
+    filter.categoryId = categoryDoc._id;
+  }
 
-  res.json(rows);
+  const products = await Product.find(filter)
+    .populate("categoryId", "name")
+    .sort(sortMap[sort] ?? sortMap.newest)
+    .lean();
+
+  res.json(products.map((p) => ({ ...p, id: p._id, category: p.categoryId?.name, categoryId: p.categoryId?._id })));
 });
 
-router.get("/:id", (req, res) => {
-  const product = db.prepare(`
-    SELECT p.*, c.name as category
-    FROM products p JOIN categories c ON c.id = p.categoryId
-    WHERE p.id = ?
-  `).get(req.params.id);
+router.get("/:id", async (req, res) => {
+  const product = await Product.findById(req.params.id).populate("categoryId", "name").lean();
   if (!product) return res.status(404).json({ message: "Product not found" });
 
-  const reviews = db.prepare(`
-    SELECT r.*, u.name as userName
-    FROM reviews r JOIN users u ON u.id = r.userId
-    WHERE r.productId = ?
-    ORDER BY r.createdAt DESC
-  `).all(req.params.id);
+  const reviews = await Review.find({ productId: req.params.id }).sort({ createdAt: -1 }).lean();
+  const userIds = reviews.map((r) => r.userId);
+  const users = await User.find({ _id: { $in: userIds } }).select("_id name").lean();
+  const userMap = Object.fromEntries(users.map((u) => [String(u._id), u.name]));
+  const normalizedReviews = reviews.map((r) => ({ ...r, id: r._id, userName: userMap[String(r.userId)] || "User" }));
 
-  res.json({ ...product, reviews });
+  res.json({
+    ...product,
+    id: product._id,
+    category: product.categoryId?.name,
+    categoryId: product.categoryId?._id,
+    reviews: normalizedReviews
+  });
 });
 
-router.post("/:id/reviews", protect, (req, res) => {
+router.post("/:id/reviews", protect, async (req, res) => {
   const { rating, comment } = req.body;
   if (!rating || !comment) return res.status(400).json({ message: "Rating and comment are required" });
   const numericRating = Number(rating);
@@ -62,27 +61,28 @@ router.post("/:id/reviews", protect, (req, res) => {
   if (!isNonEmptyString(cleanComment, 5, 500)) {
     return res.status(400).json({ message: "Comment must be between 5 and 500 characters" });
   }
-  const exists = db.prepare("SELECT id FROM products WHERE id = ?").get(req.params.id);
+  const exists = await Product.findById(req.params.id).select("_id").lean();
   if (!exists) return res.status(404).json({ message: "Product not found" });
 
   try {
-    db.prepare(`
-      INSERT INTO reviews (userId, productId, rating, comment)
-      VALUES (?, ?, ?, ?)
-    `).run(req.user.id, req.params.id, numericRating, cleanComment);
+    await Review.create({
+      userId: req.user.id,
+      productId: req.params.id,
+      rating: numericRating,
+      comment: cleanComment
+    });
   } catch {
     return res.status(409).json({ message: "You have already reviewed this product" });
   }
 
-  const agg = db.prepare(`
-    SELECT ROUND(AVG(rating), 1) as rating, COUNT(*) as count
-    FROM reviews WHERE productId = ?
-  `).get(req.params.id);
+  const agg = await Review.aggregate([
+    { $match: { productId: exists._id } },
+    { $group: { _id: "$productId", rating: { $avg: "$rating" }, count: { $sum: 1 } } }
+  ]);
+  const avgRating = agg[0]?.rating ? Number(agg[0].rating.toFixed(1)) : 0;
+  const count = agg[0]?.count ?? 0;
 
-  db.prepare(`
-    UPDATE products SET rating = ?, reviewsCount = ?
-    WHERE id = ?
-  `).run(agg.rating ?? 0, agg.count ?? 0, req.params.id);
+  await Product.findByIdAndUpdate(req.params.id, { rating: avgRating, reviewsCount: count });
 
   res.status(201).json({ message: "Review added" });
 });

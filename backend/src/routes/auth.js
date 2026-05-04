@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import db from "../db.js";
+import User from "../models/User.js";
 import { protect } from "../middleware/auth.js";
 import { isStrongPassword, isValidEmail, toSafeTrimmed } from "../utils/validators.js";
 
@@ -9,7 +9,7 @@ const router = express.Router();
 
 const signToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-router.post("/register", (req, res) => {
+router.post("/register", async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ message: "All fields are required" });
@@ -24,32 +24,28 @@ router.post("/register", (req, res) => {
     });
   }
 
-  const exists = db.prepare("SELECT id FROM users WHERE email = ?").get(cleanEmail);
+  const exists = await User.findOne({ email: cleanEmail }).select("_id").lean();
   if (exists) return res.status(409).json({ message: "Email already registered" });
 
   const hashed = bcrypt.hashSync(password, 10);
-  const result = db.prepare(`
-    INSERT INTO users (name, email, password, role)
-    VALUES (?, ?, ?, 'customer')
-  `).run(cleanName, cleanEmail, hashed);
-
-  const user = db.prepare("SELECT id, name, email, role FROM users WHERE id = ?").get(result.lastInsertRowid);
-  return res.status(201).json({ token: signToken(user.id), user });
+  const user = await User.create({ name: cleanName, email: cleanEmail, password: hashed, role: "customer" });
+  const safeUser = { id: String(user._id), name: user.name, email: user.email, role: user.role };
+  return res.status(201).json({ token: signToken(safeUser.id), user: safeUser });
 });
 
-router.post("/login", (req, res) => {
+router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ message: "Email and password are required" });
   const cleanEmail = toSafeTrimmed(email).toLowerCase();
   if (!isValidEmail(cleanEmail)) return res.status(400).json({ message: "Invalid email format" });
 
-  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(cleanEmail);
+  const user = await User.findOne({ email: cleanEmail }).lean();
   if (!user || !bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
-  const safeUser = { id: user.id, name: user.name, email: user.email, role: user.role };
-  return res.json({ token: signToken(user.id), user: safeUser });
+  const safeUser = { id: String(user._id), name: user.name, email: user.email, role: user.role };
+  return res.json({ token: signToken(safeUser.id), user: safeUser });
 });
 
 router.get("/me", protect, (req, res) => res.json(req.user));

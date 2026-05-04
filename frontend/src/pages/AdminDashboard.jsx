@@ -175,7 +175,8 @@ const AdminDashboard = () => {
         </form>
         <div className="simple-table">
           {categories.map((cat) => {
-            const used = products.some((p) => Number(p.categoryId) === Number(cat.id));
+            const catKey = String(cat.id);
+            const used = products.some((p) => String(p.categoryId) === catKey);
             return (
               <div key={cat.id} className="table-row">
                 <span>

@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
-import db from "../db.js";
+import User from "../models/User.js";
 
-export const protect = (req, res, next) => {
+export const protect = async (req, res, next) => {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Unauthorized" });
@@ -10,9 +10,9 @@ export const protect = (req, res, next) => {
   const token = auth.split(" ")[1];
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = db.prepare("SELECT id, name, email, role FROM users WHERE id = ?").get(decoded.id);
+    const user = await User.findById(decoded.id).select("_id name email role").lean();
     if (!user) return res.status(401).json({ message: "Invalid token" });
-    req.user = user;
+    req.user = { id: String(user._id), name: user.name, email: user.email, role: user.role };
     next();
   } catch {
     return res.status(401).json({ message: "Invalid token" });

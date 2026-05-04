@@ -30,7 +30,10 @@ const ProductCard = ({ product, onWishlisted }) => {
         <Link to={`/product/${product.id}`} className="product-title">
           {product.title}
         </Link>
-        <p className="muted">${product.price.toFixed(2)}</p>
+        <div className="price-row">
+          <p className="price-tag">${product.price.toFixed(2)}</p>
+          <p className="muted">Stock: {product.stock}</p>
+        </div>
         <div className="product-actions">
           <button className="btn" onClick={() => addToCart(product)}>
             <ShoppingBag size={16} /> Add
