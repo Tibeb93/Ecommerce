@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
@@ -29,8 +30,16 @@ router.post("/register", async (req, res) => {
 
   const hashed = bcrypt.hashSync(password, 10);
   const user = await User.create({ name: cleanName, email: cleanEmail, password: hashed, role: "customer" });
+
+  const verificationToken = user.createEmailVerificationToken();
+  await user.save({ validateBeforeSave: false });
+
   const safeUser = { id: String(user._id), name: user.name, email: user.email, role: user.role };
-  return res.status(201).json({ token: signToken(safeUser.id), user: safeUser });
+  return res.status(201).json({
+    token: signToken(safeUser.id),
+    user: safeUser,
+    emailVerificationToken: verificationToken
+  });
 });
 
 router.post("/login", async (req, res) => {
@@ -49,5 +58,69 @@ router.post("/login", async (req, res) => {
 });
 
 router.get("/me", protect, (req, res) => res.json(req.user));
+
+router.post("/verify-email", async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ message: "Token is required" });
+
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+  const user = await User.findOne({
+    emailVerificationToken: hashedToken,
+    emailVerificationExpires: { $gt: Date.now() }
+  });
+
+  if (!user) return res.status(400).json({ message: "Invalid or expired token" });
+
+  user.isEmailVerified = true;
+  user.emailVerificationToken = null;
+  user.emailVerificationExpires = null;
+  await user.save({ validateBeforeSave: false });
+
+  res.json({ message: "Email verified successfully" });
+});
+
+router.post("/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: "Email is required" });
+
+  const cleanEmail = toSafeTrimmed(email).toLowerCase();
+  const user = await User.findOne({ email: cleanEmail });
+  if (!user) {
+    return res.json({ message: "If that email exists, a reset link has been sent" });
+  }
+
+  const resetToken = user.createPasswordResetToken();
+  await user.save({ validateBeforeSave: false });
+
+  res.json({
+    message: "If that email exists, a reset link has been sent",
+    passwordResetToken: resetToken
+  });
+});
+
+router.post("/reset-password", async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ message: "Token and password are required" });
+  if (!isStrongPassword(password)) {
+    return res.status(400).json({
+      message: "Password must be at least 8 chars and include uppercase, lowercase, and number"
+    });
+  }
+
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: Date.now() }
+  });
+
+  if (!user) return res.status(400).json({ message: "Invalid or expired token" });
+
+  user.password = bcrypt.hashSync(password, 10);
+  user.passwordResetToken = null;
+  user.passwordResetExpires = null;
+  await user.save({ validateBeforeSave: false });
+
+  res.json({ message: "Password reset successful" });
+});
 
 export default router;

@@ -22,6 +22,7 @@ import wishlistRoutes from "./routes/wishlist.js";
 import orderRoutes from "./routes/orders.js";
 import paymentRoutes from "./routes/payment.js";
 import adminRoutes from "./routes/admin.js";
+import reviewRoutes from "./routes/reviews.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,7 +32,7 @@ if (isProd) {
   app.set("trust proxy", 1);
 }
 
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 const rawClientUrls = process.env.CLIENT_URL?.trim();
 const allowedOrigins = rawClientUrls
   ? rawClientUrls
@@ -75,6 +76,7 @@ app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 app.use((err, _, res, __) => {
   console.error(err);

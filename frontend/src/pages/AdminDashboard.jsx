@@ -1,238 +1,137 @@
 import { useEffect, useState } from "react";
+import { BarChart3, Box, ClipboardList, Grid3X3, Package, Star, Tag, Users } from "lucide-react";
 import api from "../api";
 import { getErrorMessage } from "../utils/errors";
-import { isValidImageUrl } from "../utils/validators";
+import AdminOverview from "../components/admin/AdminOverview";
+import AdminProducts from "../components/admin/AdminProducts";
+import AdminOrders from "../components/admin/AdminOrders";
+import AdminUsers from "../components/admin/AdminUsers";
+import AdminReviews from "../components/admin/AdminReviews";
+import AdminCategories from "../components/admin/AdminCategories";
+
+const TABS = [
+  { key: "overview", label: "Overview", icon: <BarChart3 size={16} /> },
+  { key: "products", label: "Products", icon: <Package size={16} /> },
+  { key: "orders", label: "Orders", icon: <ClipboardList size={16} /> },
+  { key: "users", label: "Users", icon: <Users size={16} /> },
+  { key: "reviews", label: "Reviews", icon: <Star size={16} /> },
+  { key: "categories", label: "Categories", icon: <Tag size={16} /> },
+];
 
 const AdminDashboard = () => {
+  const [activeTab, setActiveTab] = useState("overview");
   const [insights, setInsights] = useState(null);
-  const [products, setProducts] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [newCategory, setNewCategory] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [newProduct, setNewProduct] = useState({
-    title: "",
-    description: "",
-    image: "",
-    price: "",
-    stock: "",
-    categoryId: ""
-  });
+  const [error, setError] = useState("");
 
-  const load = async () => {
+  const loadInsights = async () => {
     try {
       setLoading(true);
-      const [i, p, o, u, c] = await Promise.all([
-        api.get("/admin/insights"),
-        api.get("/admin/products"),
-        api.get("/admin/orders"),
-        api.get("/admin/users"),
-        api.get("/admin/categories")
-      ]);
-      setInsights(i.data);
-      setProducts(p.data);
-      setOrders(o.data);
-      setUsers(u.data);
-      setCategories(c.data);
+      const { data } = await api.get("/admin/insights");
+      setInsights(data);
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to load dashboard data."));
+      setError(getErrorMessage(err, "Failed to load dashboard"));
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  const createProduct = async (e) => {
-    e.preventDefault();
-    setMessage("");
-    setError("");
-    if (newProduct.title.trim().length < 3) return setError("Product title must be at least 3 characters.");
-    if (newProduct.description.trim().length < 10) return setError("Description must be at least 10 characters.");
-    if (!isValidImageUrl(newProduct.image)) return setError("Please enter a valid image URL.");
-    if (Number(newProduct.price) <= 0) return setError("Price must be greater than 0.");
-    if (!Number.isInteger(Number(newProduct.stock)) || Number(newProduct.stock) < 0) {
-      return setError("Stock must be a non-negative integer.");
-    }
-    try {
-      await api.post("/admin/products", newProduct);
-      setNewProduct({ title: "", description: "", image: "", price: "", stock: "", categoryId: "" });
-      setMessage("Product created successfully.");
-      load();
-    } catch (err) {
-      setError(getErrorMessage(err, "Failed to create product."));
-    }
-  };
-
-  const updateOrderStatus = async (id, status) => {
-    setMessage("");
-    setError("");
-    try {
-      await api.patch(`/admin/orders/${id}/status`, { status });
-      setMessage(`Order #${id} updated.`);
-      load();
-    } catch (err) {
-      setError(getErrorMessage(err, "Failed to update order status."));
-    }
-  };
-
-  const deleteProduct = async (id) => {
-    setMessage("");
-    setError("");
-    if (!window.confirm("Delete this product? This cannot be undone.")) return;
-    try {
-      await api.delete(`/admin/products/${id}`);
-      setMessage("Product removed.");
-      load();
-    } catch (err) {
-      setError(getErrorMessage(err, "Failed to delete product."));
-    }
-  };
-
-  const createCategory = async (e) => {
-    e.preventDefault();
-    setMessage("");
-    setError("");
-    if (newCategory.trim().length < 2) return setError("Category name must be at least 2 characters.");
-    try {
-      await api.post("/admin/categories", { name: newCategory });
-      setNewCategory("");
-      setMessage("Category created.");
-      load();
-    } catch (err) {
-      setError(getErrorMessage(err, "Failed to create category."));
-    }
-  };
-
-  const deleteUnusedCategory = async (id) => {
-    setMessage("");
-    setError("");
-    if (!window.confirm("Remove this unused category?")) return;
-    try {
-      await api.delete(`/admin/categories/${id}`);
-      setMessage("Unused category removed.");
-      load();
-    } catch (err) {
-      setError(getErrorMessage(err, "Cannot remove category while it is used by products."));
-    }
-  };
+  useEffect(() => { loadInsights(); }, []);
 
   return (
     <div className="container section">
-      <h1>Admin Dashboard</h1>
-      {error && <p className="form-error">{error}</p>}
-      {message && <p className="form-success">{message}</p>}
-      {loading && <p className="muted">Loading dashboard...</p>}
+      <div className="admin-header">
+        <h1>Admin Dashboard</h1>
+        <p className="muted">Manage your store products, orders, and customers</p>
+      </div>
 
-      {insights && (
-        <div className="stats-grid">
-          <article className="glass stat-card">Sales: ${insights.totalSales.toFixed(2)}</article>
-          <article className="glass stat-card">Orders: {insights.totalOrders}</article>
-          <article className="glass stat-card">Users: {insights.totalUsers}</article>
-          <article className="glass stat-card">Products: {insights.totalProducts}</article>
+      {error && <p className="form-error">{error}</p>}
+
+      <div className="admin-tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={`admin-tab ${activeTab === t.key ? "active" : ""}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="admin-content">
+        {activeTab === "overview" && <DashboardOverviewWrapper insights={insights} loading={loading} onTabChange={setActiveTab} onRefresh={loadInsights} />}
+        {activeTab === "products" && <AdminProducts onRefresh={loadInsights} />}
+        {activeTab === "orders" && <AdminOrders />}
+        {activeTab === "users" && <AdminUsers />}
+        {activeTab === "reviews" && <AdminReviews />}
+        {activeTab === "categories" && <AdminCategories onRefresh={loadInsights} />}
+      </div>
+    </div>
+  );
+};
+
+const DashboardOverviewWrapper = ({ insights, loading, onTabChange, onRefresh }) => {
+  const [lowStock, setLowStock] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
+
+  useEffect(() => {
+    if (insights) {
+      setLowStock(insights.lowStock || []);
+      setRecentOrders(insights.recentOrders || []);
+    }
+  }, [insights]);
+
+  if (loading) return <p className="muted" style={{ padding: "2rem 0" }}>Loading dashboard...</p>;
+  if (!insights) return null;
+
+  return (
+    <div>
+      <div className="admin-stats-grid">
+        <div className="glass admin-stat-card">
+          <span className="admin-stat-value">${insights.totalSales.toFixed(2)}</span>
+          <span className="admin-stat-label">Total Sales</span>
+        </div>
+        <div className="glass admin-stat-card">
+          <span className="admin-stat-value">{insights.totalOrders}</span>
+          <span className="admin-stat-label">Orders</span>
+        </div>
+        <div className="glass admin-stat-card">
+          <span className="admin-stat-value">{insights.totalUsers}</span>
+          <span className="admin-stat-label">Users</span>
+        </div>
+        <div className="glass admin-stat-card">
+          <span className="admin-stat-value">{insights.totalProducts}</span>
+          <span className="admin-stat-label">Products</span>
+        </div>
+      </div>
+
+      {lowStock.length > 0 && (
+        <div className="glass admin-panel" style={{ marginTop: "1rem" }}>
+          <h3 style={{ margin: "0 0 0.5rem" }}>Low Stock Warning</h3>
+          {lowStock.map((p) => (
+            <div key={p._id} className="admin-table-row">
+              <span>{p.title}</span>
+              <span className="admin-badge" style={{ background: "var(--yellow)", color: "#111" }}>{p.stock} left</span>
+            </div>
+          ))}
         </div>
       )}
 
-      <section className="glass panel">
-        <h2>Add product</h2>
-        <form className="admin-form" onSubmit={createProduct}>
-          <input placeholder="Title" value={newProduct.title} onChange={(e) => setNewProduct((s) => ({ ...s, title: e.target.value }))} required />
-          <input placeholder="Image URL" value={newProduct.image} onChange={(e) => setNewProduct((s) => ({ ...s, image: e.target.value }))} required />
-          <input type="number" step="0.01" placeholder="Price" value={newProduct.price} onChange={(e) => setNewProduct((s) => ({ ...s, price: e.target.value }))} required />
-          <input type="number" placeholder="Stock" value={newProduct.stock} onChange={(e) => setNewProduct((s) => ({ ...s, stock: e.target.value }))} required />
-          <select value={newProduct.categoryId} onChange={(e) => setNewProduct((s) => ({ ...s, categoryId: e.target.value }))} required>
-            <option value="">Category</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-          <textarea placeholder="Description" value={newProduct.description} onChange={(e) => setNewProduct((s) => ({ ...s, description: e.target.value }))} required />
-          <button className="btn" type="submit">
-            Save product
-          </button>
-        </form>
-      </section>
-
-      <section className="glass panel">
-        <h2>Categories</h2>
-        <form className="inline-form" onSubmit={createCategory}>
-          <input
-            placeholder="New category"
-            value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value)}
-            required
-          />
-          <button className="btn" type="submit">
-            Add category
-          </button>
-        </form>
-        <div className="simple-table">
-          {categories.map((cat) => {
-            const catKey = String(cat.id);
-            const used = products.some((p) => String(p.categoryId) === catKey);
-            return (
-              <div key={cat.id} className="table-row">
-                <span>
-                  {cat.name} {used ? "(in use)" : "(unused)"}
-                </span>
-                <button className="btn ghost" disabled={used} onClick={() => deleteUnusedCategory(cat.id)}>
-                  Remove unused
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="glass panel">
-        <h2>Orders</h2>
-        {orders.map((order) => (
-          <div className="order-row" key={order.id}>
-            <span>#{order.id} - {order.customerName} - ${order.total.toFixed(2)}</span>
-            <select value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
-              {["Pending", "Processing", "Shipped", "Delivered", "Cancelled"].map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
+      {recentOrders.length > 0 && (
+        <div className="glass admin-panel" style={{ marginTop: "1rem" }}>
+          <div className="admin-panel-header">
+            <h3 style={{ margin: 0 }}>Recent Orders</h3>
+            <button className="btn ghost" onClick={() => onTabChange("orders")}>View All</button>
           </div>
-        ))}
-      </section>
-
-      <section className="glass panel">
-        <h2>Users</h2>
-        <div className="simple-table">
-          {users.map((u) => (
-            <div key={u.id}>
-              {u.name} - {u.email} ({u.role})
+          {recentOrders.map((o) => (
+            <div key={o._id} className="admin-table-row">
+              <span>#{String(o._id).slice(-6)} - {o.customerName} - ${o.total.toFixed(2)}</span>
+              <span className="admin-badge" style={{ background: "var(--primary)" }}>{o.status}</span>
             </div>
           ))}
         </div>
-      </section>
-
-      <section className="glass panel">
-        <h2>Products</h2>
-        <div className="simple-table">
-          {products.map((p) => (
-            <div key={p.id} className="table-row">
-              <span>
-                {p.title} - ${p.price.toFixed(2)} - Stock {p.stock}
-              </span>
-              <button className="btn ghost" onClick={() => deleteProduct(p.id)}>
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
+      )}
     </div>
   );
 };

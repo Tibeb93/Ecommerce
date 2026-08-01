@@ -8,11 +8,22 @@ import User from "../models/User.js";
 
 const router = express.Router();
 
+const normalize = (p) => ({
+  ...p,
+  id: p._id,
+  category: p.categoryId?.name,
+  categoryId: p.categoryId?._id,
+  brand: p.brand || "",
+  salePrice: p.salePrice || 0,
+  saleEnds: p.saleEnds || null,
+});
+
 router.get("/", async (req, res) => {
   const { q = "", category = "", sort = "newest", min = 0, max = 999999 } = req.query;
 
-  const sortMap = { newest: { createdAt: -1 }, priceAsc: { price: 1 }, priceDesc: { price: -1 }, rating: { rating: -1 } };
+  const sortMap = { newest: { createdAt: -1 }, priceAsc: { price: 1 }, priceDesc: { price: -1 }, rating: { rating: -1 }, sales: { reviewsCount: -1 } };
   const filter = {
+    isDeleted: { $ne: true },
     title: { $regex: String(q), $options: "i" },
     price: { $gte: Number(min), $lte: Number(max) }
   };
@@ -28,11 +39,60 @@ router.get("/", async (req, res) => {
     .sort(sortMap[sort] ?? sortMap.newest)
     .lean();
 
-  res.json(products.map((p) => ({ ...p, id: p._id, category: p.categoryId?.name, categoryId: p.categoryId?._id })));
+  res.json(products.map(normalize));
+});
+
+router.get("/featured", async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 8, 20);
+  const products = await Product.find({ isDeleted: { $ne: true }, rating: { $gte: 4 } })
+    .populate("categoryId", "name")
+    .sort({ rating: -1, reviewsCount: -1 })
+    .limit(limit)
+    .lean();
+  res.json(products.map(normalize));
+});
+
+router.get("/new", async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 8, 20);
+  const products = await Product.find({ isDeleted: { $ne: true } })
+    .populate("categoryId", "name")
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+  res.json(products.map(normalize));
+});
+
+router.get("/best-sellers", async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 8, 20);
+  const products = await Product.find({ isDeleted: { $ne: true }, reviewsCount: { $gt: 0 } })
+    .populate("categoryId", "name")
+    .sort({ reviewsCount: -1 })
+    .limit(limit)
+    .lean();
+  res.json(products.map(normalize));
+});
+
+router.get("/flash-deals", async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 8, 20);
+  const products = await Product.find({
+    isDeleted: { $ne: true },
+    salePrice: { $gt: 0 },
+    saleEnds: { $gt: new Date() },
+  })
+    .populate("categoryId", "name")
+    .sort({ saleEnds: 1 })
+    .limit(limit)
+    .lean();
+  res.json(products.map(normalize));
+});
+
+router.get("/brands", async (_, res) => {
+  const brands = await Product.distinct("brand", { brand: { $ne: "" }, isDeleted: { $ne: true } });
+  res.json(brands.sort());
 });
 
 router.get("/:id", async (req, res) => {
-  const product = await Product.findById(req.params.id).populate("categoryId", "name").lean();
+  const product = await Product.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).populate("categoryId", "name").lean();
   if (!product) return res.status(404).json({ message: "Product not found" });
 
   const reviews = await Review.find({ productId: req.params.id }).sort({ createdAt: -1 }).lean();
@@ -46,6 +106,9 @@ router.get("/:id", async (req, res) => {
     id: product._id,
     category: product.categoryId?.name,
     categoryId: product.categoryId?._id,
+    brand: product.brand || "",
+    salePrice: product.salePrice || 0,
+    saleEnds: product.saleEnds || null,
     reviews: normalizedReviews
   });
 });
