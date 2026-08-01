@@ -23,28 +23,46 @@ const seedProductsByCategory = {
       description: "Premium wireless headphones with active noise cancellation.",
       image: "https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=800",
       price: 129.99,
-      stock: 40
+      stock: 40,
+      brand: "NeoNoise",
+      rating: 4.7,
+      reviewsCount: 128,
+      salePrice: 99.99,
+      saleEnds: new Date(Date.now() + 3 * 86400000),
     },
     {
       title: "Aurora Smart Watch",
       description: "Track fitness and notifications with all-day battery life.",
       image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800",
       price: 199.99,
-      stock: 26
+      stock: 26,
+      brand: "Aurora",
+      rating: 4.5,
+      reviewsCount: 87,
+      salePrice: 169.99,
+      saleEnds: new Date(Date.now() + 5 * 86400000),
     },
     {
       title: "PulseBeam Bluetooth Speaker",
       description: "Portable speaker with deep bass and 18-hour battery life.",
       image: "https://images.unsplash.com/photo-1589256469067-ea99122bbdc4?w=800",
       price: 79.99,
-      stock: 58
+      stock: 58,
+      brand: "PulseBeam",
+      rating: 4.3,
+      reviewsCount: 64,
     },
     {
       title: "Vertex Ultra Laptop",
       description: "Lightweight 14-inch laptop with fast performance for daily work.",
       image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=800",
       price: 899,
-      stock: 17
+      stock: 17,
+      brand: "Vertex",
+      rating: 4.8,
+      reviewsCount: 210,
+      salePrice: 799,
+      saleEnds: new Date(Date.now() + 7 * 86400000),
     }
   ],
   Fashion: [
@@ -53,21 +71,32 @@ const seedProductsByCategory = {
       description: "Soft premium cotton hoodie with modern unisex fit.",
       image: "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800",
       price: 59.99,
-      stock: 72
+      stock: 72,
+      brand: "UrbanFit",
+      rating: 4.6,
+      reviewsCount: 156,
     },
     {
       title: "Classic Denim Jacket",
       description: "Everyday denim jacket with a timeless cut and durable stitching.",
       image: "https://images.unsplash.com/photo-1521223890158-f9f7c3d5d504?w=800",
       price: 84.5,
-      stock: 34
+      stock: 34,
+      brand: "UrbanFit",
+      rating: 4.4,
+      reviewsCount: 93,
+      salePrice: 69.99,
+      saleEnds: new Date(Date.now() + 4 * 86400000),
     },
     {
       title: "Aero Knit Sneakers",
       description: "Breathable knit sneakers built for city walks and all-day comfort.",
       image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800",
       price: 109.99,
-      stock: 49
+      stock: 49,
+      brand: "AeroStride",
+      rating: 4.9,
+      reviewsCount: 312,
     }
   ],
   Home: [
@@ -76,21 +105,32 @@ const seedProductsByCategory = {
       description: "Minimal lamp with warm adjustable lighting.",
       image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=800",
       price: 44.5,
-      stock: 65
+      stock: 65,
+      brand: "LumaHome",
+      rating: 4.2,
+      reviewsCount: 45,
     },
     {
       title: "CloudRest Bedding Set",
       description: "Ultra-soft breathable bedding set for cozy, restful nights.",
       image: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=800",
       price: 119.99,
-      stock: 23
+      stock: 23,
+      brand: "CloudRest",
+      rating: 4.7,
+      reviewsCount: 178,
+      salePrice: 89.99,
+      saleEnds: new Date(Date.now() + 2 * 86400000),
     },
     {
       title: "OakLine Wall Shelf",
       description: "Floating wood shelf set designed for modern home organization.",
       image: "https://images.unsplash.com/photo-1595515106864-b8f4f1d5f6ae?w=800",
       price: 54,
-      stock: 41
+      stock: 41,
+      brand: "OakLine",
+      rating: 4.1,
+      reviewsCount: 32,
     }
   ],
   Accessories: [
@@ -99,21 +139,32 @@ const seedProductsByCategory = {
       description: "Slim RFID-blocking wallet with premium stitched leather.",
       image: "https://images.unsplash.com/photo-1627123424574-724758594e93?w=800",
       price: 39.99,
-      stock: 85
+      stock: 85,
+      brand: "MetroCraft",
+      rating: 4.5,
+      reviewsCount: 201,
     },
     {
       title: "Titan Steel Water Bottle",
       description: "Insulated stainless bottle that keeps drinks cold for 24 hours.",
       image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=800",
       price: 24.99,
-      stock: 77
+      stock: 77,
+      brand: "TitanGrip",
+      rating: 4.3,
+      reviewsCount: 145,
+      salePrice: 19.99,
+      saleEnds: new Date(Date.now() + 6 * 86400000),
     },
     {
       title: "Travel Pro Backpack",
       description: "Multi-pocket water-resistant backpack with padded laptop sleeve.",
       image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800",
       price: 69.99,
-      stock: 39
+      stock: 39,
+      brand: "TravelPro",
+      rating: 4.6,
+      reviewsCount: 189,
     }
   ],
   Beauty: [
@@ -122,21 +173,32 @@ const seedProductsByCategory = {
       description: "Hydrating daily serum designed for glow and smoothness.",
       image: "https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=800",
       price: 34.25,
-      stock: 90
+      stock: 90,
+      brand: "SilkGlow",
+      rating: 4.8,
+      reviewsCount: 267,
     },
     {
       title: "Glow Ritual Face Mask",
       description: "Nourishing clay mask to refresh, purify, and brighten skin.",
       image: "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=800",
       price: 21.5,
-      stock: 64
+      stock: 64,
+      brand: "GlowRitual",
+      rating: 4.4,
+      reviewsCount: 112,
+      salePrice: 17.99,
+      saleEnds: new Date(Date.now() + 3 * 86400000),
     },
     {
       title: "Velvet Matte Lip Set",
       description: "Long-lasting matte lip shades with smooth, lightweight finish.",
       image: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=800",
       price: 29.9,
-      stock: 52
+      stock: 52,
+      brand: "VelvetTouch",
+      rating: 4.6,
+      reviewsCount: 198,
     }
   ]
 };

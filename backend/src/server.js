@@ -15,6 +15,8 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import { connectDB } from "./db.js";
 
+import path from "path";
+import { fileURLToPath } from "url";
 import authRoutes from "./routes/auth.js";
 import categoryRoutes from "./routes/categories.js";
 import productRoutes from "./routes/products.js";
@@ -29,6 +31,9 @@ import notificationRoutes from "./routes/notifications.js";
 import analyticsRoutes from "./routes/analytics.js";
 import uploadRoutes from "./routes/upload.js";
 import contactRoutes from "./routes/contact.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -89,6 +94,12 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/contact", contactRoutes);
+
+const frontendDist = path.resolve(__dirname, "../../frontend/dist");
+app.use(express.static(frontendDist));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(frontendDist, "index.html"));
+});
 
 app.use((err, _, res, __) => {
   console.error(err);
