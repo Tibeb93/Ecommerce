@@ -36,15 +36,15 @@ const ScrollToTop = () => {
 const FadeInObserver = () => {
   const { pathname } = useLocation();
   useEffect(() => {
-    let observer;
-    const timer = setTimeout(() => {
-      observer = new IntersectionObserver(
-        (entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("visible"); observer.unobserve(e.target); } }),
-        { threshold: 0.1 }
-      );
-      document.querySelectorAll(".fade-in-section").forEach((el) => observer.observe(el));
-    }, 150);
-    return () => { clearTimeout(timer); observer?.disconnect(); };
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("visible"); observer.unobserve(e.target); } }),
+      { threshold: 0.1 }
+    );
+    const observeAll = () => document.querySelectorAll(".fade-in-section:not(.visible)").forEach((el) => observer.observe(el));
+    observeAll();
+    const domObserver = new MutationObserver(observeAll);
+    domObserver.observe(document.body, { childList: true, subtree: true });
+    return () => { observer.disconnect(); domObserver.disconnect(); };
   }, [pathname]);
   return null;
 };
