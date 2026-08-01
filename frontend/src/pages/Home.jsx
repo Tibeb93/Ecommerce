@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import api from "../api";
 import HeroBanner from "../components/HeroBanner";
 import CategoryGrid from "../components/CategoryGrid";
@@ -24,45 +24,69 @@ const Home = () => {
   const [products, setProducts] = useState([]);
   const [filters, setFilters] = useState({ q: "", category: "", sort: "newest" });
   const [loading, setLoading] = useState(true);
+  const [heroLoaded, setHeroLoaded] = useState(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    const loadAll = async () => {
-      try {
-        const [catRes, featRes, bestRes, flashRes, newRes, brandRes, revRes, prodRes] = await Promise.all([
-          api.get("/categories"),
-          api.get("/products/featured"),
-          api.get("/products/best-sellers"),
-          api.get("/products/flash-deals"),
-          api.get("/products/new"),
-          api.get("/products/brands"),
-          api.get("/reviews/recent", { params: { limit: 6 } }),
-          api.get("/products", { params: { sort: "newest" } }),
-        ]);
-        setCategories(catRes.data);
-        setFeatured(featRes.data.slice(0, 4));
-        setBestSellers(bestRes.data.slice(0, 4));
-        setFlashDeals(flashRes.data.slice(0, 4));
-        setNewArrivals(newRes.data.slice(0, 4));
-        setBrands(brandRes.data.slice(0, 8));
-        setRecentReviews(revRes.data);
-        setProducts(prodRes.data);
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadAll();
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
 
-  const fetchProducts = async () => {
-    const { data } = await api.get("/products", { params: filters });
-    setProducts(data);
-  };
+  const loadHero = useCallback(async () => {
+    try {
+      const [catRes, prodRes] = await Promise.all([
+        api.get("/categories"),
+        api.get("/products", { params: { sort: "newest" } }),
+      ]);
+      if (!mountedRef.current) return;
+      setCategories(catRes.data);
+      setProducts(prodRes.data);
+      setHeroLoaded(true);
+      setLoading(false);
+    } catch {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, []);
+
+  const loadSections = useCallback(async () => {
+    try {
+      const [featRes, bestRes, flashRes, newRes, brandRes, revRes] = await Promise.all([
+        api.get("/products/featured"),
+        api.get("/products/best-sellers"),
+        api.get("/products/flash-deals"),
+        api.get("/products/new"),
+        api.get("/products/brands"),
+        api.get("/reviews/recent", { params: { limit: 6 } }),
+      ]);
+      if (!mountedRef.current) return;
+      setFeatured(featRes.data.slice(0, 4));
+      setBestSellers(bestRes.data.slice(0, 4));
+      setFlashDeals(flashRes.data.slice(0, 4));
+      setNewArrivals(newRes.data.slice(0, 4));
+      setBrands(brandRes.data.slice(0, 8));
+      setRecentReviews(revRes.data);
+    } catch {
+      // silent
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHero();
+    loadSections();
+  }, [loadHero, loadSections]);
+
+  const fetchProducts = useCallback(async () => {
+    try {
+      const { data } = await api.get("/products", { params: filters });
+      if (mountedRef.current) setProducts(data);
+    } catch {
+      // silent
+    }
+  }, [filters]);
 
   useEffect(() => {
     if (filters.q || filters.category) fetchProducts();
-  }, [filters.q, filters.category, filters.sort]);
+  }, [filters.q, filters.category, filters.sort, fetchProducts]);
 
   const isFiltering = filters.q || filters.category;
   const grouped = products.reduce((acc, item) => {
@@ -76,7 +100,7 @@ const Home = () => {
 
   return (
     <div>
-      {!isFiltering && (
+      {!isFiltering && heroLoaded && (
         <>
           <HeroBanner productCount={products.length} categoryCount={categories.length} />
           <CategoryGrid categories={categories} onSelect={(name) => setFilters((s) => ({ ...s, category: name }))} />
