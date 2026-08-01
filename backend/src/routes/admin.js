@@ -9,6 +9,9 @@ import Wishlist from "../models/Wishlist.js";
 import Review from "../models/Review.js";
 import Coupon from "../models/Coupon.js";
 import Notification from "../models/Notification.js";
+import { upload, processUpload, processMultipleUploads } from "../middleware/upload.js";
+import { deleteImage } from "../utils/cloudinary.js";
+import { sendLowStockAlert } from "../utils/email.js";
 
 const router = express.Router();
 router.use(protect, adminOnly);
@@ -182,6 +185,40 @@ router.put("/products/:id", async (req, res) => {
     variants: Array.isArray(variants) ? variants : existing.variants,
   });
   res.json({ message: "Product updated" });
+
+  if (Number(stock) <= (existing.lowStockAlert || 5) && Number(stock) > 0) {
+    const admins = await User.find({ role: "admin" }).select("email").lean();
+    admins.forEach(a => sendLowStockAlert(a.email, { title: toSafeTrimmed(title), stock: Number(stock) }).catch(() => {}));
+  }
+});
+
+router.post("/products/:id/images", upload.array("images", 10), async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  if (!product || product.isDeleted) return res.status(404).json({ message: "Product not found" });
+  if (!req.files?.length) return res.status(400).json({ message: "No files uploaded" });
+  try {
+    const results = await processMultipleUploads(req.files, "products");
+    const newImages = results.map(r => r.url);
+    product.images = [...(product.images || []), ...newImages];
+    await product.save();
+    res.json({ images: product.images });
+  } catch (err) {
+    res.status(500).json({ message: err.message || "Upload failed" });
+  }
+});
+
+router.delete("/products/:id/images/:index", async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  if (!product) return res.status(404).json({ message: "Product not found" });
+  const idx = Number(req.params.index);
+  if (idx < 0 || idx >= (product.images || []).length) return res.status(400).json({ message: "Invalid index" });
+  const removed = product.images.splice(idx, 1)[0];
+  await product.save();
+  if (removed?.includes("cloudinary")) {
+    const publicId = removed.split("/upload/")?.[1]?.split(".")?.[0];
+    if (publicId) deleteImage(publicId).catch(() => {});
+  }
+  res.json({ images: product.images });
 });
 
 router.delete("/products/:id", async (req, res) => {

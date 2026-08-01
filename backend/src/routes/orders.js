@@ -7,6 +7,7 @@ import User from "../models/User.js";
 import Coupon from "../models/Coupon.js";
 import Notification from "../models/Notification.js";
 import mongoose from "mongoose";
+import { sendOrderConfirmation, sendOrderStatusUpdate } from "../utils/email.js";
 
 const router = express.Router();
 
@@ -157,6 +158,10 @@ router.post("/", protect, async (req, res) => {
       message: `Your order ${order[0].orderNumber} has been placed successfully.`,
       link: `/orders`,
     });
+    sendOrderConfirmation(
+      { name: req.user.name, email: req.user.email },
+      order[0]
+    ).catch(() => {});
   } catch {}
 });
 
@@ -303,6 +308,7 @@ router.patch("/admin/:id/status", protect, adminOnly, async (req, res) => {
       Refunded: "Your order has been refunded.",
     };
     if (statusMessages[status]) {
+      const orderUser = await User.findById(order.userId).select("name email").lean();
       await Notification.create({
         userId: order.userId,
         type: "order",
@@ -310,6 +316,9 @@ router.patch("/admin/:id/status", protect, adminOnly, async (req, res) => {
         message: statusMessages[status],
         link: "/orders",
       });
+      if (orderUser) {
+        sendOrderStatusUpdate(orderUser, order, status).catch(() => {});
+      }
     }
   } catch {}
 

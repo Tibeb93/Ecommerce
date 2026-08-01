@@ -5,6 +5,8 @@ import User from "../models/User.js";
 import Address from "../models/Address.js";
 import Order from "../models/Order.js";
 import { isStrongPassword, isValidEmail, toSafeTrimmed } from "../utils/validators.js";
+import { upload, processUpload } from "../middleware/upload.js";
+import { deleteImage } from "../utils/cloudinary.js";
 
 const router = express.Router();
 
@@ -28,6 +30,24 @@ router.put("/me", protect, async (req, res) => {
   await User.findByIdAndUpdate(req.user.id, updates);
   const user = await User.findById(req.user.id).select("-password").lean();
   res.json({ ...user, id: user._id });
+});
+
+router.post("/avatar", protect, upload.single("avatar"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  try {
+    const currentUser = await User.findById(req.user.id).select("avatar").lean();
+    const result = await processUpload(req.file, "avatars");
+    if (!result) return res.status(500).json({ message: "Upload failed" });
+    await User.findByIdAndUpdate(req.user.id, { avatar: result.url });
+    if (currentUser?.avatar && currentUser.avatar.includes("cloudinary")) {
+      const publicId = currentUser.avatar.split("/").pop()?.split(".")[0];
+      if (publicId) deleteImage(`avatars/${publicId}`).catch(() => {});
+    }
+    const user = await User.findById(req.user.id).select("-password").lean();
+    res.json({ ...user, id: user._id });
+  } catch (err) {
+    res.status(500).json({ message: err.message || "Upload failed" });
+  }
 });
 
 router.put("/change-password", protect, async (req, res) => {

@@ -35,6 +35,23 @@ const Profile = () => {
     finally { setLoading(false); }
   };
 
+  const uploadAvatar = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error("Image must be under 10MB"); return; }
+    const formData = new FormData();
+    formData.append("avatar", file);
+    setSaving(true);
+    try {
+      const { data } = await api.post("/profile/avatar", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      setUser(data);
+      setForm(f => ({ ...f, avatar: data.avatar || "" }));
+      toast.success("Avatar updated!");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to upload avatar"));
+    } finally { setSaving(false); }
+  };
+
   const loadAddresses = async () => {
     try {
       const { data } = await api.get("/profile/addresses");
@@ -109,17 +126,7 @@ const Profile = () => {
           <div className="profile-avatar-wrap" onClick={() => fileInputRef.current?.click()}>
             {user?.avatar ? <img src={user.avatar} alt="" className="profile-avatar" /> : <div className="profile-avatar-placeholder"><User size={32} /></div>}
             <div className="profile-avatar-overlay"><Camera size={16} /></div>
-            <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(e) => {
-              const file = e.target.files[0];
-              if (file) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  setForm(f => ({ ...f, avatar: ev.target.result }));
-                  setEditing(true);
-                };
-                reader.readAsDataURL(file);
-              }
-            }} />
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={uploadAvatar} />
           </div>
           <h3 style={{ textAlign: "center", margin: "0.5rem 0 0.2rem" }}>{user?.name}</h3>
           <p className="muted" style={{ textAlign: "center", fontSize: "13px" }}>{user?.email}</p>

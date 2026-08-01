@@ -27,6 +27,8 @@ import profileRoutes from "./routes/profile.js";
 import couponRoutes from "./routes/coupons.js";
 import notificationRoutes from "./routes/notifications.js";
 import analyticsRoutes from "./routes/analytics.js";
+import uploadRoutes from "./routes/upload.js";
+import contactRoutes from "./routes/contact.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -85,6 +87,8 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/upload", uploadRoutes);
+app.use("/api/contact", contactRoutes);
 
 app.use((err, _, res, __) => {
   console.error(err);

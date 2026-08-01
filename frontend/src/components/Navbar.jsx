@@ -44,6 +44,7 @@ const Navbar = () => {
           <NavLink to="/?category=electronics" onClick={() => setMobileOpen(false)}>Shop</NavLink>
           <NavLink to="/cart" onClick={() => setMobileOpen(false)}>Cart</NavLink>
           {user && <NavLink to="/orders" onClick={() => setMobileOpen(false)}>Orders</NavLink>}
+          <NavLink to="/contact" onClick={() => setMobileOpen(false)}>Contact</NavLink>
         </div>
 
         <div className="nav-right">

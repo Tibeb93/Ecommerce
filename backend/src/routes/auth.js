@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { protect } from "../middleware/auth.js";
 import { isStrongPassword, isValidEmail, toSafeTrimmed } from "../utils/validators.js";
+import { sendWelcomeEmail, sendPasswordResetEmail } from "../utils/email.js";
 
 const router = express.Router();
 
@@ -35,6 +36,9 @@ router.post("/register", async (req, res) => {
   await user.save({ validateBeforeSave: false });
 
   const safeUser = { id: String(user._id), name: user.name, email: user.email, role: user.role };
+
+  sendWelcomeEmail({ name: cleanName, email: cleanEmail }).catch(() => {});
+
   return res.status(201).json({
     token: signToken(safeUser.id),
     user: safeUser,
@@ -91,6 +95,8 @@ router.post("/forgot-password", async (req, res) => {
 
   const resetToken = user.createPasswordResetToken();
   await user.save({ validateBeforeSave: false });
+
+  sendPasswordResetEmail({ name: user.name, email: cleanEmail }, resetToken).catch(() => {});
 
   res.json({
     message: "If that email exists, a reset link has been sent",

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { X, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Plus, Trash2, ChevronDown, ChevronUp, Upload } from "lucide-react";
 import api from "../../api";
 import { getErrorMessage } from "../../utils/errors";
 import { isValidImageUrl } from "../../utils/validators";
@@ -40,8 +40,27 @@ const AdminProductForm = ({ product, categories, onClose, onSaved }) => {
   const [loading, setLoading] = useState(false);
   const [imgPreview, setImgPreview] = useState("");
   const [expandedVariants, setExpandedVariants] = useState(new Set());
+  const fileInputRef = useRef(null);
+  const [uploadingImg, setUploadingImg] = useState(false);
 
   const isEdit = !!product;
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setError("Image must be under 10MB"); return; }
+    setUploadingImg(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("folder", "products");
+      const { data } = await api.post("/upload/single", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      set("image", data.url);
+      setImgPreview(data.url);
+    } catch (err) {
+      setError(getErrorMessage(err, "Upload failed"));
+    } finally { setUploadingImg(false); }
+  };
 
   useEffect(() => {
     if (product) {
@@ -232,7 +251,13 @@ const AdminProductForm = ({ product, categories, onClose, onSaved }) => {
             </div>
             <div>
               <label style={labelStyle}>Image URL *</label>
-              <input style={inputStyle} placeholder="https://..." value={form.image} onChange={(e) => set("image", e.target.value)} />
+              <div style={{ display: "flex", gap: "0.4rem" }}>
+                <input style={{ ...inputStyle, flex: 1 }} placeholder="https://..." value={form.image} onChange={(e) => set("image", e.target.value)} />
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={handleImageUpload} />
+                <button type="button" className="btn" onClick={() => fileInputRef.current?.click()} disabled={uploadingImg} style={{ whiteSpace: "nowrap" }}>
+                  <Upload size={14} /> {uploadingImg ? "Uploading..." : "Upload"}
+                </button>
+              </div>
               {imgPreview && (
                 <div style={{ marginTop: "0.5rem" }}>
                   <img src={imgPreview} alt="Preview" style={{ width: "80px", height: "80px", borderRadius: "8px", objectFit: "cover", border: "1px solid var(--border)" }}
