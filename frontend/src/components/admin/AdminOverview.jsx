@@ -1,155 +1,85 @@
-import { useEffect, useState } from "react";
-import { DollarSign, ShoppingCart, Users, Package, AlertTriangle, Clock } from "lucide-react";
-import api from "../../api";
-import { getErrorMessage } from "../../utils/errors";
-const AdminOverview = ({ onTabSwitch }) => {
-  const [insights, setInsights] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+import { Link } from "react-router-dom";
+import { AlertTriangle, ArrowRight, ClipboardList, DollarSign, Package, TrendingUp, Users } from "lucide-react";
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      const { data } = await api.get("/admin/insights");
-      setInsights(data);
-    } catch (err) {
-      setError(getErrorMessage(err, "Failed to load insights."));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (loading) return <p className="muted" style={{ padding: "2rem 0" }}>Loading dashboard...</p>;
-  if (error) return <p className="form-error" style={{ padding: "2rem 0" }}>{error}</p>;
-  if (!insights) return null;
-
-  const stats = [
-    { label: "Total Sales", value: `$${insights.totalSales.toFixed(2)}`, icon: DollarSign, color: "var(--green)" },
-    { label: "Total Orders", value: insights.totalOrders, icon: ShoppingCart, color: "var(--primary)" },
-    { label: "Total Users", value: insights.totalUsers, icon: Users, color: "var(--accent)" },
-    { label: "Total Products", value: insights.totalProducts, icon: Package, color: "var(--yellow)" },
-  ];
+const AdminOverview = ({ insights, loading, onTabChange, onRefresh }) => {
+  if (loading) return <div className="skeleton" style={{ height: 300, borderRadius: 12 }} />;
 
   return (
     <div>
       <div className="admin-stats-grid">
-        {stats.map((s) => (
-          <div key={s.label} className="glass admin-stat-card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-              <span className="muted" style={{ fontSize: "13px" }}>{s.label}</span>
-              <s.icon size={20} style={{ color: s.color }} />
-            </div>
-            <p style={{ margin: 0, fontSize: "1.6rem", fontWeight: 700, color: s.color }}>{s.value}</p>
+        <div className="glass admin-stat-card">
+          <DollarSign size={24} style={{ color: "var(--green)" }} />
+          <div>
+            <p className="muted" style={{ fontSize: "12px", margin: 0 }}>Total Revenue</p>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "1.4rem" }}>${insights?.totalSales?.toLocaleString() || 0}</p>
           </div>
-        ))}
+        </div>
+        <div className="glass admin-stat-card">
+          <ClipboardList size={24} style={{ color: "var(--primary)" }} />
+          <div>
+            <p className="muted" style={{ fontSize: "12px", margin: 0 }}>Total Orders</p>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "1.4rem" }}>{insights?.totalOrders || 0}</p>
+          </div>
+        </div>
+        <div className="glass admin-stat-card">
+          <Users size={24} style={{ color: "var(--yellow)" }} />
+          <div>
+            <p className="muted" style={{ fontSize: "12px", margin: 0 }}>Total Users</p>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "1.4rem" }}>{insights?.totalUsers || 0}</p>
+          </div>
+        </div>
+        <div className="glass admin-stat-card">
+          <Package size={24} style={{ color: "var(--primary)" }} />
+          <div>
+            <p className="muted" style={{ fontSize: "12px", margin: 0 }}>Total Products</p>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "1.4rem" }}>{insights?.totalProducts || 0}</p>
+          </div>
+        </div>
       </div>
 
-      {insights.lowStock && insights.lowStock.length > 0 && (
-        <div className="glass admin-panel" style={{ marginTop: "1.5rem", padding: "1.2rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-            <AlertTriangle size={18} style={{ color: "var(--yellow)" }} />
-            <h3 style={{ margin: 0, fontSize: "1rem" }}>Low Stock Alerts ({insights.lowStock.length})</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1rem", marginTop: "1rem" }}>
+        <div className="glass" style={{ padding: "1rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
+            <h3 style={{ margin: 0 }}>Recent Orders</h3>
+            <button className="btn ghost" onClick={() => onTabChange("orders")} style={{ fontSize: "12px" }}>View All <ArrowRight size={12} /></button>
           </div>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Stock</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {insights.lowStock.map((item) => (
-                  <tr key={item.id} className="admin-table-row">
-                    <td>{item.title}</td>
-                    <td>
-                      <span style={{ color: item.stock === 0 ? "var(--red)" : "var(--yellow)", fontWeight: 600 }}>
-                        {item.stock} left
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="btn ghost"
-                        style={{ fontSize: "12px", padding: "0.3rem 0.6rem" }}
-                        onClick={() => onTabSwitch && onTabSwitch("products")}
-                      >
-                        Manage
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {insights?.recentOrders?.length ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+              {insights.recentOrders.map((o) => (
+                <div key={o._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.4rem 0", borderBottom: "1px solid var(--border)", fontSize: "13px" }}>
+                  <div>
+                    <span style={{ fontFamily: "monospace" }}>#{o.orderNumber || o._id?.slice(-6)}</span>
+                    <span className="muted" style={{ marginLeft: "0.5rem" }}>{o.customerName}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontWeight: 600 }}>${o.total?.toFixed(2)}</span>
+                    <span className={`badge badge-${o.status === "Delivered" ? "new" : o.status === "Cancelled" ? "out" : "low"}`} style={{ fontSize: "10px" }}>{o.status}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="muted" style={{ textAlign: "center" }}>No orders yet</p>}
         </div>
-      )}
 
-      {insights.recentOrders && insights.recentOrders.length > 0 && (
-        <div className="glass admin-panel" style={{ marginTop: "1.5rem", padding: "1.2rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-            <Clock size={18} style={{ color: "var(--primary)" }} />
-            <h3 style={{ margin: 0, fontSize: "1rem" }}>Recent Orders</h3>
+        <div className="glass" style={{ padding: "1rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
+            <h3 style={{ margin: 0 }}>Low Stock</h3>
+            <button className="btn ghost" onClick={() => onTabChange("products")} style={{ fontSize: "12px" }}>View All <ArrowRight size={12} /></button>
           </div>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Order ID</th>
-                  <th>Customer</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {insights.recentOrders.map((order) => (
-                  <tr key={order.id} className="admin-table-row">
-                    <td style={{ fontFamily: "monospace" }}>#{String(order.id).slice(-6)}</td>
-                    <td>{order.customerName || "—"}</td>
-                    <td style={{ fontWeight: 600 }}>${Number(order.total).toFixed(2)}</td>
-                    <td>
-                      <span
-                        className="admin-badge"
-                        style={{
-                          background: STATUS_COLORS[order.status] || "var(--muted)",
-                          color: "#fff",
-                        }}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="muted" style={{ fontSize: "13px" }}>
-                      {new Date(order.createdAt).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button
-            className="btn ghost"
-            style={{ marginTop: "1rem", fontSize: "13px" }}
-            onClick={() => onTabSwitch && onTabSwitch("orders")}
-          >
-            View All Orders
-          </button>
+          {insights?.lowStock?.length ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+              {insights.lowStock.map((p) => (
+                <div key={p._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.4rem 0", borderBottom: "1px solid var(--border)", fontSize: "13px" }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "120px" }}>{p.title}</span>
+                  <span style={{ color: p.stock <= 2 ? "var(--red)" : "var(--yellow)", fontWeight: 600 }}>{p.stock} left</span>
+                </div>
+              ))}
+            </div>
+          ) : <p className="muted" style={{ textAlign: "center" }}>All stocked up!</p>}
         </div>
-      )}
+      </div>
     </div>
   );
-};
-
-const STATUS_COLORS = {
-  Pending: "var(--yellow)",
-  Processing: "var(--primary)",
-  Shipped: "#8b5cf6",
-  Delivered: "var(--green)",
-  Cancelled: "var(--red)",
 };
 
 export default AdminOverview;

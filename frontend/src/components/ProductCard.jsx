@@ -4,12 +4,13 @@ import { Eye, Heart, ShoppingBag, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import api from "../api";
-import { getErrorMessage } from "../utils/errors";
 
 const ProductCard = ({ product, onWishlisted }) => {
   const { addToCart } = useCart();
   const { user } = useAuth();
+  const toast = useToast();
   const [imgError, setImgError] = useState(false);
 
   const isOnSale = product.salePrice > 0 && product.saleEnds && new Date(product.saleEnds) > new Date();
@@ -17,12 +18,13 @@ const ProductCard = ({ product, onWishlisted }) => {
   const stockStatus = product.stock === 0 ? "out" : product.stock <= 5 ? "low" : "in";
 
   const addWishlist = async () => {
-    if (!user) return alert("Login required to use wishlist.");
+    if (!user) return toast.warning("Login required to use wishlist.");
     try {
       await api.post(`/wishlist/${product.id}`);
+      toast.success("Added to wishlist!");
       if (onWishlisted) onWishlisted(product.id);
     } catch (err) {
-      alert(getErrorMessage(err, "Could not add to wishlist"));
+      toast.error("Could not add to wishlist");
     }
   };
 

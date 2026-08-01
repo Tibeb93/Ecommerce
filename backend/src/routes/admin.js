@@ -7,6 +7,8 @@ import User from "../models/User.js";
 import Category from "../models/Category.js";
 import Wishlist from "../models/Wishlist.js";
 import Review from "../models/Review.js";
+import Coupon from "../models/Coupon.js";
+import Notification from "../models/Notification.js";
 
 const router = express.Router();
 router.use(protect, adminOnly);
@@ -289,16 +291,30 @@ router.delete("/categories/:id", async (req, res) => {
 
 // ======================== ORDERS ========================
 router.get("/orders", async (req, res) => {
-  const { status, page = 1, limit = 20 } = req.query;
+  const { status, page = 1, limit = 20, search = "", sort = "newest", paymentMethod = "" } = req.query;
   const filter = {};
-  if (status) filter.status = status;
+  if (status && status !== "all") filter.status = status;
+  if (paymentMethod && paymentMethod !== "all") filter.paymentMethod = paymentMethod;
+  if (search) {
+    filter.$or = [
+      { orderNumber: { $regex: search, $options: "i" } },
+      { trackingCode: { $regex: search, $options: "i" } },
+      { "shippingAddress.fullName": { $regex: search, $options: "i" } },
+      { "shippingAddress.address": { $regex: search, $options: "i" } },
+    ];
+  }
+
+  let sortObj = { createdAt: -1 };
+  if (sort === "oldest") sortObj = { createdAt: 1 };
+  else if (sort === "total_high") sortObj = { total: -1 };
+  else if (sort === "total_low") sortObj = { total: 1 };
 
   const pageNum = Math.max(1, Number(page));
   const limitNum = Math.min(Math.max(1, Number(limit)), 100);
   const skip = (pageNum - 1) * limitNum;
 
   const [orders, total] = await Promise.all([
-    Order.find(filter).populate("userId", "name email").sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
+    Order.find(filter).populate("userId", "name email").sort(sortObj).skip(skip).limit(limitNum).lean(),
     Order.countDocuments(filter),
   ]);
 
@@ -310,13 +326,51 @@ router.get("/orders", async (req, res) => {
   });
 });
 
+router.get("/orders/export", async (req, res) => {
+  const { status, from, to } = req.query;
+  const filter = {};
+  if (status && status !== "all") filter.status = status;
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) filter.createdAt.$gte = new Date(from);
+    if (to) filter.createdAt.$lte = new Date(to + "T23:59:59.999Z");
+  }
+  const orders = await Order.find(filter).sort({ createdAt: -1 }).populate("userId", "name email").lean();
+  const csvHeader = "Order Number,Date,Customer,Email,Status,Payment,Subtotal,Shipping,Tax,Discount,Total\n";
+  const csvRows = orders.map((o) => {
+    const date = new Date(o.createdAt).toISOString().split("T")[0];
+    return `${o.orderNumber || o._id},${date},"${o.userId?.name || ""}","${o.userId?.email || ""}",${o.status},${o.paymentMethod},${o.subtotal || 0},${o.shippingCost || 0},${o.tax || 0},${o.discount || 0},${o.total}`;
+  }).join("\n");
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", "attachment; filename=orders.csv");
+  res.send(csvHeader + csvRows);
+});
+
 router.patch("/orders/:id/status", async (req, res) => {
-  const { status } = req.body;
-  if (!["Pending", "Processing", "Shipped", "Delivered", "Cancelled"].includes(status)) {
+  const { status, note, trackingCode } = req.body;
+  const validStatuses = ["Pending", "Paid", "Processing", "Shipped", "Delivered", "Cancelled", "Refunded"];
+  if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: "Invalid order status" });
   }
-  await Order.findByIdAndUpdate(req.params.id, { status });
-  res.json({ message: "Order status updated" });
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  if (status === "Cancelled" && order.status !== "Cancelled") {
+    for (const item of order.items) {
+      await Product.updateOne({ _id: item.productId }, { $inc: { stock: item.quantity } });
+    }
+    if (order.paymentStatus === "Paid") order.paymentStatus = "Refunded";
+    order.cancelledAt = new Date();
+  }
+  if (status === "Delivered") order.deliveredAt = new Date();
+  if (status === "Refunded") order.paymentStatus = "Refunded";
+  if (trackingCode) order.trackingCode = trackingCode;
+
+  order.status = status;
+  order.statusHistory = order.statusHistory || [];
+  order.statusHistory.push({ status, date: new Date(), note: note || "" });
+  await order.save();
+  res.json({ message: "Order status updated", order: { ...order.toObject(), id: order._id } });
 });
 
 // ======================== USERS ========================
@@ -332,14 +386,18 @@ router.get("/users", async (req, res) => {
 
 // ======================== REVIEWS ========================
 router.get("/reviews", async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
+  const { page = 1, limit = 20, status = "" } = req.query;
   const pageNum = Math.max(1, Number(page));
   const limitNum = Math.min(Math.max(1, Number(limit)), 100);
   const skip = (pageNum - 1) * limitNum;
 
+  const filter = {};
+  if (status === "hidden") filter.hidden = true;
+  else if (status === "visible") filter.hidden = { $ne: true };
+
   const [reviews, total] = await Promise.all([
-    Review.find().populate("userId", "name email").populate("productId", "title image").sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
-    Review.countDocuments(),
+    Review.find(filter).populate("userId", "name email").populate("productId", "title image").sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
+    Review.countDocuments(filter),
   ]);
 
   res.json({
@@ -358,21 +416,159 @@ router.get("/reviews", async (req, res) => {
   });
 });
 
+router.patch("/reviews/:id/toggle", async (req, res) => {
+  const review = await Review.findById(req.params.id);
+  if (!review) return res.status(404).json({ message: "Review not found" });
+  review.hidden = !review.hidden;
+  await review.save();
+  res.json({ message: review.hidden ? "Review hidden" : "Review approved", hidden: review.hidden });
+});
+
 router.delete("/reviews/:id", async (req, res) => {
   const review = await Review.findById(req.params.id);
   if (!review) return res.status(404).json({ message: "Review not found" });
 
+  const productId = review.productId;
   await Review.findByIdAndDelete(req.params.id);
 
   const agg = await Review.aggregate([
-    { $match: { productId: review.productId } },
+    { $match: { productId } },
     { $group: { _id: "$productId", rating: { $avg: "$rating" }, count: { $sum: 1 } } },
   ]);
   const avgRating = agg[0]?.rating ? Number(agg[0].rating.toFixed(1)) : 0;
   const count = agg[0]?.count ?? 0;
-  await Product.findByIdAndUpdate(review.productId, { rating: avgRating, reviewsCount: count });
+  await Product.findByIdAndUpdate(productId, { rating: avgRating, reviewsCount: count });
 
   res.json({ message: "Review deleted" });
+});
+
+// ======================== COUPONS ========================
+router.get("/coupons", async (req, res) => {
+  const { page = 1, limit = 20, search = "" } = req.query;
+  const filter = {};
+  if (search) filter.code = { $regex: search, $options: "i" };
+  const pageNum = Math.max(1, Number(page));
+  const limitNum = Math.min(Math.max(1, Number(limit)), 100);
+  const skip = (pageNum - 1) * limitNum;
+  const [coupons, total] = await Promise.all([
+    Coupon.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
+    Coupon.countDocuments(filter),
+  ]);
+  res.json({ coupons: coupons.map((c) => ({ ...c, id: c._id })), total, page: pageNum, pages: Math.ceil(total / limitNum) });
+});
+
+router.post("/coupons", async (req, res) => {
+  const { code, description, type, value, minPurchase, maxDiscount, usageLimit, expiresAt } = req.body;
+  const cleanCode = toSafeTrimmed(code);
+  if (!cleanCode || cleanCode.length < 3) return res.status(400).json({ message: "Coupon code must be at least 3 characters" });
+  if (!["fixed", "percentage"].includes(type)) return res.status(400).json({ message: "Type must be 'fixed' or 'percentage'" });
+  if (!value || value <= 0) return res.status(400).json({ message: "Value must be greater than 0" });
+  if (!expiresAt) return res.status(400).json({ message: "Expiration date is required" });
+  if (type === "percentage" && value > 100) return res.status(400).json({ message: "Percentage cannot exceed 100" });
+
+  try {
+    const coupon = await Coupon.create({
+      code: cleanCode.toUpperCase(),
+      description: toSafeTrimmed(description || ""),
+      type,
+      value: Number(value),
+      minPurchase: Number(minPurchase) || 0,
+      maxDiscount: Number(maxDiscount) || 0,
+      usageLimit: Number(usageLimit) || 0,
+      expiresAt: new Date(expiresAt),
+    });
+    res.status(201).json({ ...coupon.toObject(), id: coupon._id });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: "Coupon code already exists" });
+    throw err;
+  }
+});
+
+router.put("/coupons/:id", async (req, res) => {
+  const coupon = await Coupon.findById(req.params.id);
+  if (!coupon) return res.status(404).json({ message: "Coupon not found" });
+  const { code, description, type, value, minPurchase, maxDiscount, usageLimit, expiresAt, isActive } = req.body;
+  if (code !== undefined) coupon.code = toSafeTrimmed(code).toUpperCase();
+  if (description !== undefined) coupon.description = toSafeTrimmed(description);
+  if (type !== undefined) coupon.type = type;
+  if (value !== undefined) coupon.value = Number(value);
+  if (minPurchase !== undefined) coupon.minPurchase = Number(minPurchase);
+  if (maxDiscount !== undefined) coupon.maxDiscount = Number(maxDiscount);
+  if (usageLimit !== undefined) coupon.usageLimit = Number(usageLimit);
+  if (expiresAt !== undefined) coupon.expiresAt = new Date(expiresAt);
+  if (isActive !== undefined) coupon.isActive = !!isActive;
+  await coupon.save();
+  res.json({ ...coupon.toObject(), id: coupon._id });
+});
+
+router.delete("/coupons/:id", async (req, res) => {
+  const coupon = await Coupon.findByIdAndDelete(req.params.id);
+  if (!coupon) return res.status(404).json({ message: "Coupon not found" });
+  res.json({ message: "Coupon deleted" });
+});
+
+// ======================== NOTIFICATIONS ========================
+router.post("/notifications", async (req, res) => {
+  const { userId, type, title, message, link } = req.body;
+  if (!userId || !type || !title || !message) return res.status(400).json({ message: "Missing required fields" });
+  const notif = await Notification.create({ userId, type, title, message, link: link || "" });
+  res.status(201).json({ ...notif.toObject(), id: notif._id });
+});
+
+router.get("/notifications", async (req, res) => {
+  const { userId, unreadOnly } = req.query;
+  const filter = {};
+  if (userId) filter.userId = userId;
+  if (unreadOnly === "true") filter.read = false;
+  const notifications = await Notification.find(filter).sort({ createdAt: -1 }).limit(50).lean();
+  res.json(notifications.map((n) => ({ ...n, id: n._id })));
+});
+
+// ======================== REPORTS ========================
+router.get("/reports/sales", async (req, res) => {
+  const { from, to } = req.query;
+  const filter = { paymentStatus: "Paid" };
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) filter.createdAt.$gte = new Date(from);
+    if (to) filter.createdAt.$lte = new Date(to + "T23:59:59.999Z");
+  }
+  const [summary, byDay, byCategory, byPayment] = await Promise.all([
+    Order.aggregate([{ $match: filter }, { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 }, avg: { $avg: "$total" } } }]),
+    Order.aggregate([
+      { $match: filter },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, revenue: { $sum: "$total" }, orders: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]),
+    Order.aggregate([
+      { $match: filter },
+      { $unwind: "$items" },
+      { $lookup: { from: "products", localField: "items.productId", foreignField: "_id", as: "product" } },
+      { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
+      { $lookup: { from: "categories", localField: "product.categoryId", foreignField: "_id", as: "category" } },
+      { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
+      { $group: { _id: "$category.name", revenue: { $sum: { $multiply: ["$items.unitPrice", "$items.quantity"] } }, count: { $sum: 1 } } },
+      { $sort: { revenue: -1 } },
+    ]),
+    Order.aggregate([
+      { $match: filter },
+      { $group: { _id: "$paymentMethod", count: { $sum: 1 }, total: { $sum: "$total" } } },
+    ]),
+  ]);
+  res.json({
+    summary: summary[0] || { total: 0, count: 0, avg: 0 },
+    byDay: byDay.map((d) => ({ date: d._id, revenue: d.revenue, orders: d.orders })),
+    byCategory: byCategory.map((c) => ({ category: c._id || "Other", revenue: c.revenue, count: c.count })),
+    byPayment: byPayment.map((p) => ({ method: p._id, count: p.count, total: p.total })),
+  });
+});
+
+// ======================== VISITORS (placeholder) ========================
+router.get("/visitors", async (_, res) => {
+  const uniqueBuyers = await Order.distinct("userId", { paymentStatus: "Paid" });
+  const totalOrders = await Order.countDocuments();
+  const totalUsers = await User.countDocuments();
+  res.json({ uniqueBuyers: uniqueBuyers.length, totalOrders, totalUsers, conversionRate: totalUsers > 0 ? Number(((totalOrders / totalUsers) * 100).toFixed(1)) : 0 });
 });
 
 export default router;

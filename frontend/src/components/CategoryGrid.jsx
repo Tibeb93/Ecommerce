@@ -20,11 +20,10 @@ const CategoryGrid = ({ categories, onSelect }) => (
             key={cat.id}
             className="glass category-card"
             whileHover={{ y: -4, scale: 1.02 }}
-            transition={{ duration: 0.2 }}
             onClick={() => onSelect(cat.name)}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
+            transition={{ delay: i * 0.05, duration: 0.2 }}
           >
             <span className="category-icon">{categoryIcons[cat.name.toLowerCase()] || "📦"}</span>
             <span className="category-name">{cat.name}</span>

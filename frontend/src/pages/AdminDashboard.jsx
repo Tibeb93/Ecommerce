@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Package, Star, Tag, Users } from "lucide-react";
+import { BarChart3, ClipboardList, CreditCard, FileText, Package, Star, Tag, Users } from "lucide-react";
 import api from "../api";
 import { getErrorMessage } from "../utils/errors";
 
@@ -9,6 +9,8 @@ const AdminOrders = lazy(() => import("../components/admin/AdminOrders"));
 const AdminUsers = lazy(() => import("../components/admin/AdminUsers"));
 const AdminReviews = lazy(() => import("../components/admin/AdminReviews"));
 const AdminCategories = lazy(() => import("../components/admin/AdminCategories"));
+const AdminCoupons = lazy(() => import("../components/admin/AdminCoupons"));
+const AdminReports = lazy(() => import("../components/admin/AdminReports"));
 
 const TABS = [
   { key: "overview", label: "Overview", icon: <BarChart3 size={16} /> },
@@ -17,6 +19,8 @@ const TABS = [
   { key: "users", label: "Users", icon: <Users size={16} /> },
   { key: "reviews", label: "Reviews", icon: <Star size={16} /> },
   { key: "categories", label: "Categories", icon: <Tag size={16} /> },
+  { key: "coupons", label: "Coupons", icon: <CreditCard size={16} /> },
+  { key: "reports", label: "Reports", icon: <FileText size={16} /> },
 ];
 
 const TabLoader = () => (
@@ -74,6 +78,8 @@ const AdminDashboard = () => {
           {activeTab === "users" && <AdminUsers />}
           {activeTab === "reviews" && <AdminReviews />}
           {activeTab === "categories" && <AdminCategories onRefresh={loadInsights} />}
+          {activeTab === "coupons" && <AdminCoupons />}
+          {activeTab === "reports" && <AdminReports />}
         </Suspense>
       </div>
     </div>

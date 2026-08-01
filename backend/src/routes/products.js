@@ -91,6 +91,29 @@ router.get("/brands", async (_, res) => {
   res.json(brands.sort());
 });
 
+router.get("/recently-viewed", async (req, res) => {
+  const { ids } = req.query;
+  if (!ids) return res.json([]);
+  const idList = ids.split(",").filter(Boolean).slice(0, 12);
+  const products = await Product.find({ _id: { $in: idList }, isDeleted: { $ne: true } }).lean();
+  const ordered = idList.map(id => products.find(p => String(p._id) === id)).filter(Boolean);
+  res.json(ordered.map(normalize));
+});
+
+router.get("/related/:id", async (req, res) => {
+  const product = await Product.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).lean();
+  if (!product) return res.json([]);
+  const related = await Product.find({
+    _id: { $ne: product._id },
+    isDeleted: { $ne: true },
+    $or: [
+      { categoryId: product.categoryId },
+      { brand: product.brand, brand: { $ne: "" } }
+    ]
+  }).limit(8).lean();
+  res.json(related.map(normalize));
+});
+
 router.get("/:id", async (req, res) => {
   const product = await Product.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).populate("categoryId", "name").lean();
   if (!product) return res.status(404).json({ message: "Product not found" });

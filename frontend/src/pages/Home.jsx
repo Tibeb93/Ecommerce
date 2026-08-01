@@ -12,6 +12,7 @@ import InstagramGallery from "../components/InstagramGallery";
 import Newsletter from "../components/Newsletter";
 import ProductCard from "../components/ProductCard";
 import HomeSkeleton from "../components/HomeSkeleton";
+import RecentlyViewed from "../components/RecentlyViewed";
 
 const Home = () => {
   const [categories, setCategories] = useState([]);
@@ -135,6 +136,7 @@ const Home = () => {
           })}
 
           <CustomerReviews reviews={recentReviews} />
+          <RecentlyViewed />
           <InstagramGallery />
           <Newsletter />
         </>
